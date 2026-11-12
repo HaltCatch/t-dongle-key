@@ -1,244 +1,58 @@
+# T-Dongle Key
 
-## Support
+[中文](README.md) · [English](README.en.md)
 
-Support me via monero please if you like this project:
+把带屏幕的 T-Dongle S3 变成多协议 USB 安全钥匙。T-Dongle Key 在 Pico Keys 生态上整合 FIDO2、OpenPGP、PIV、OATH 与 OTP，并提供设备状态界面和桌面模拟器，便于开发与回归验证。
 
-![1000110279](https://github.com/user-attachments/assets/cde7178c-9241-4efb-abd5-005288bd960d)
+<p align="center"><img src="media/readme/t-dongle-key.jpg" width="480" alt="T-Dongle S3 实物 / T-Dongle S3 device" /></p>
 
+## 功能
 
-monero:42eQ1sZtR1USUcGRwc4hiTLNvL7q8U9XSCVVtuhRFKKREpevd4F1X3aN8X4UzkqNTy3n4BsfUooLvj1ydjpem5Ee9SRA2dZ
+- 多协议集成：FIDO2/U2F、OpenPGP、PIV、OATH 与 OTP。
+- 设备界面：共享 LVGL 状态页、认证反馈、休眠与动画。
+- 硬件目标：LilyGO T-Dongle S3，并包含 Pico 2 W 相关构建支持。
+- 存储与兼容：OpenPGP 独立存储、PIN 校验及版本兼容路径。
+- 桌面模拟：SDL2 界面与软件后端，可执行协议和界面回归测试。
+- 固定依赖：Pico FIDO、Pico OpenPGP、Pico Keys SDK 与 LVGL 由子模块提交确定。
 
+## 快速开始
 
-# tdongle-yk
+C/C++ 工具链、CMake、pkg-config、SDL2、Python 3 与 Git。实物构建另需匹配的 ESP-IDF 或 Pico SDK。
 
-`tdongle-yk` is a LilyGO T-Dongle S3 focused fork of `pico-fido2` / `pico-openpgp`.
+```sh
+git clone https://github.com/HaltCatch/t-dongle-key.git
+cd t-dongle-key
+bash tools/checkout-deps.sh
+bash tools/run-desktop.sh --test
+# Start the interactive emulator:
+bash tools/run-desktop.sh
+```
 
-The goal of this fork is simple:
+## 配置
 
-- run `FIDO2`, `OTP`, `OATH`, `OpenPGP` and `PIV` on the `LilyGO T-Dongle S3`
-- expose a `YubiKey 5` compatible USB identity for better Windows / Yubico tool compatibility
-- make the board usable as a compact USB security token with native support for its button, RGB LED and display power behavior
-- provide working helper scripts for build, flash and Windows PIV / BitLocker import workflows
-
-This is not an official Yubico product.
-
-## What This Fork Adds
-
-- Native `LilyGO T-Dongle S3` board support
-- `ESP32-S3` board selection via `PICO_FIDO_ESP_BOARD=tdongle-s3`
-- Native button mapping for FIDO user presence on `GPIO 0`
-- `APA102` RGB LED support using the T-Dongle S3 pins
-- Safe ST7735 display sleep handling so the display does not stay white and powered
-- A stable `Yubikey5` build profile for Windows smartcard tooling
-- Windows-focused PIV fixes for:
-  - `SELECT PIV`
-  - `GET METADATA`
-  - certificate reads
-  - Microsoft smartcard container mapping
-  - `CHUID` and `CCC` object population
-- Helper scripts for:
-  - full erase + flash
-  - PKCS#12 import into PIV
-  - generating a BitLocker-compatible self-signed PFX
-
-
-## Hardware Target
-
-Board: `LilyGO T-Dongle S3`
-
-### Pinout
-
-| Function | Pin |
+| 配置项 | 说明 |
 | --- | --- |
-| User button | `GPIO 0` |
-| APA102 data | `GPIO 40` |
-| APA102 clock | `GPIO 39` |
-| ST7735 MOSI | `GPIO 3` |
-| ST7735 SCK | `GPIO 5` |
-| ST7735 CS | `GPIO 4` |
-| ST7735 DC | `GPIO 2` |
-| ST7735 backlight | `GPIO 38` |
+| `PICO_FIDO_ESP_BOARD` | ESP32 目标板，T-Dongle 使用 `tdongle-s3`。 |
+| `ENABLE_EMULATION` | 启用桌面软件后端。 |
+| `ENABLE_OATH_APP / ENABLE_OTP_APP` | 组合固件中的 OATH/OTP 功能开关。 |
+| `USB_VID / USB_PID / VIDPID` | USB 标识及兼容配置；使用适合目标设备的合法标识。 |
+| `TDONGLE_DESKTOP_BUILD_DIR / TDONGLE_BUILD_JOBS` | 桌面构建目录与并行度。 |
 
-### Board-specific behavior
+## 使用
 
-- The boot button is used as the `FIDO user presence` button.
-- The RGB LED is configured as an `APA102` device.
-- The ST7735 display is put into `Sleep In (0x10)` and its backlight is driven low during init to avoid a permanently lit white screen.
+`tools/run-desktop.sh` 用于桌面开发；硬件固件根据目标板的 CMake/SDK 配置构建。桌面模拟器使用隔离的软件存储，不代表真实设备的硬件密钥保护。项目基于 [CDRLpart/tdongle-yk](https://github.com/CDRLpart/tdongle-yk)，并集成 Pico Keys 系列组件；不是 Yubico 官方产品。
 
-Implementation file: `src/fido2/board_tdongle.c`
+## 项目结构
 
-## Repository Layout
+- `src/fido2/` — 组合应用与板级接入
+- `src/fido2/gui/` — 设备界面
+- `tools/` — 依赖、模拟器与构建工具
+- `tests/` — 协议与升级回归
 
-- `src/fido2/board_tdongle.c`
-  - LilyGO T-Dongle S3 hardware support
-- `tools/flash_clean_yk5.cmd`
-  - full chip erase + flash of the YubiKey-compatible build
-- `tools/flash_clean_recovery.cmd`
-  - full chip erase + flash of the known-good recovery build
-- `tools/import_piv_pkcs12.py`
-  - direct PKCS#12 import into the PIV applet
-  - writes certificate, `CHUID`, `CCC`, `MSCMAP`, and `MSROOTS`
-- `tools/new_bitlocker_pfx.ps1`
-  - generates a self-signed PFX with the BitLocker EKU
+## 第三方动画素材
 
-## Build
+动画精灵属于第三方内容，原始来源已无法确认，许可尚未核实。如有侵权，请通过 [Issues](https://github.com/HaltCatch/t-dongle-key/issues) 联系删除。
 
-This fork is primarily documented for `Windows + ESP-IDF + ESP32-S3`.
+## 许可
 
-### Prerequisites
-
-- `ESP-IDF 5.5.x`
-- Python available for `idf.py` and `esptool`
-- Git submodules initialized
-
-### Example build on Windows
-
-```powershell
-$env:PATH='C:\Users\rapha\AppData\Local\Programs\Python\Python311;' + $env:PATH
-. 'C:\Espressif\frameworks\esp-idf-v5.5.3\export.ps1'
-python "$env:IDF_PATH\tools\idf.py" -B build-tdongle-yk5 -DPICO_FIDO_ESP_BOARD=tdongle-s3 -DVIDPID=Yubikey5 build
-```
-
-Important build options:
-
-- `-DPICO_FIDO_ESP_BOARD=tdongle-s3`
-- `-DVIDPID=Yubikey5`
-
-Current supported ESP board values:
-
-- `generic`
-- `tdongle-s3`
-
-Current supported `VIDPID` presets include:
-
-- `Yubikey5`
-- `YubikeyNeo`
-- `NitroFIDO2`
-- `Gnuk`
-- `GnuPG`
-
-## Flashing
-
-Both flash helper scripts always do a `full erase` first.
-
-### Flash the YubiKey-compatible build
-
-```cmd
-tools\flash_clean_yk5.cmd COM5
-```
-
-### Flash the recovery build
-
-```cmd
-tools\flash_clean_recovery.cmd COM5
-```
-
-If the board is not detected:
-
-1. Hold the `BOOT` button while plugging in the dongle.
-2. Run the flash script again.
-3. Unplug / replug after flashing.
-
-## Windows PIV Workflow
-
-This fork includes a direct PIV import workflow for Windows.
-
-### Import a PKCS#12 bundle into slot `9A`
-
-```cmd
-python tools\import_piv_pkcs12.py -i C:\bitlocker.pfx -p DeinPasswort -s 9a --auth-mode off --reader "Yubico"
-```
-
-The import script writes:
-
-- private key into the PIV slot
-- X.509 certificate object
-- `CHUID` (`0x5FC102`)
-- `CCC` / capability container (`0x5FC107`)
-- Microsoft smartcard mapping object (`0x5FFF10`)
-- Microsoft roots object (`0x5FFF11`)
-
-### Verify the PIV smartcard stack
-
-```cmd
-python tools\import_piv_pkcs12.py --reader "Yubico" --connect-only
-python tools\import_piv_pkcs12.py --reader "Yubico" --select-only
-python tools\import_piv_pkcs12.py --reader "Yubico" -s 9a --read-metadata
-python tools\import_piv_pkcs12.py --reader "Yubico" -s 9a --read-cert
-certutil -scinfo
-```
-
-For a full Windows and BitLocker walkthrough, see:
-
-- [docs/WINDOWS-PIV-BITLOCKER.md](docs/WINDOWS-PIV-BITLOCKER.md)
-
-## BitLocker Notes
-
-This repository now supports a working Windows smartcard / PIV path for BitLocker certificate handling.
-
-Important caveats:
-
-- Smartcard certificate protectors are for `fixed data drives` and `removable data drives`.
-- Native Windows `smartcard login` for a `local standalone account` is not supported by this repository alone.
-- For `BitLocker`, you need a certificate profile that matches the BitLocker EKU requirements.
-
-Helper for generating a compatible test certificate:
-
-```cmd
-powershell -ExecutionPolicy Bypass -File tools\new_bitlocker_pfx.ps1 -PfxPath C:\bitlocker-bitlocker-oid.pfx -Password DeinPasswort
-```
-
-## Known Scope
-
-This fork is focused on:
-
-- `LilyGO T-Dongle S3`
-- `ESP32-S3`
-- `Windows` smartcard compatibility
-- `PIV` stability and helper tooling
-
-It is not intended to be a polished generic multi-board distribution.
-
-## Upstream Attribution
-
-This repository is based on:
-
-- `pico-fido2`
-- `pico-openpgp`
-- `pico-keys-sdk`
-
-Please keep upstream attribution intact when redistributing the fork.
-
-## Submodules
-
-This repository currently keeps the upstream components as submodules:
-
-- `pico-fido`
-- `pico-openpgp`
-- `pico-keys-sdk`
-
-The `.gitmodules` file is configured with relative URLs:
-
-- `../pico-fido.git`
-- `../pico-openpgp.git`
-- `../pico-keys-sdk.git`
-
-That means the cleanest GitHub layout is:
-
-- top-level repo: `tdongle-yk`
-- sibling repos in the same GitHub account or organization:
-  - `pico-fido`
-  - `pico-openpgp`
-  - `pico-keys-sdk`
-
-If you want to publish this fork as a working project, push the modified submodule repositories first, then push the top-level repository.
-
-Publishing notes:
-
-- [docs/PUBLISHING.md](docs/PUBLISHING.md)
-
-## License
-
-This fork inherits the licensing model of the upstream project and its subcomponents.
-
-Review the upstream license files before redistributing binaries, modified firmware, or downstream forks.
+[AGPL-3.0](LICENSE)。原创部分与第三方组件的适用范围见 [LICENSE_SCOPE.md](LICENSE_SCOPE.md)；各第三方版权和许可见相应声明文件。

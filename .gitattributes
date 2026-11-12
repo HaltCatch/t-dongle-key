@@ -1,0 +1,40 @@
+docs/gif/*.png filter=lfs diff=lfs merge=lfs -text
+*.pdf filter=lfs diff=lfs merge=lfs -text
+tools/assets/*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text
+*.sh text eol=lf
+*.py text eol=lf
+
+# Binary media are stored directly in Git.
+/media/readme/t-dongle-key.jpg -filter -diff -merge
+/tools/assets/cat.png -filter -diff -merge
+/tools/assets/mouse.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-0_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-1_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-2_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-3_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-4_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-5_Normal.png -filter -diff -merge
+/tools/assets/sprites/dinosaur-page-6_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-0_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-1_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-2_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-3_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-4_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-5_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-6_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-7_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-8_Normal.png -filter -diff -merge
+/tools/assets/sprites/golden-cat-page-9_Normal.png -filter -diff -merge
+/tools/assets/sprites/reindeer-sleigh-page-0_Normal.png -filter -diff -merge
+/tools/assets/sprites/reindeer-sleigh-page-1_Normal.png -filter -diff -merge
+/tools/assets/sprites/reindeer-sleigh-page-2_Normal.png -filter -diff -merge
+/tools/assets/sprites/reindeer-sleigh-page-3_Normal.png -filter -diff -merge
+/tools/assets/sprites/reindeer-sleigh-page-4_Normal.png -filter -diff -merge
+/tools/assets/sprites/rubber-duck-page-0_Normal.png -filter -diff -merge
+/tools/assets/sprites/rubber-duck-page-1_Normal.png -filter -diff -merge
+/tools/assets/sprites/rubber-duck-page-2_Normal.png -filter -diff -merge
+/tools/assets/sprites/rubber-duck-page-3_Normal.png -filter -diff -merge
+/tools/assets/sprites/rubber-duck-page-4_Normal.png -filter -diff -merge

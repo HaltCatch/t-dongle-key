@@ -1,13 +1,16 @@
 param(
     [string]$PfxPath = "C:\bitlocker-bitlocker-oid.pfx",
-    [string]$Password = "DeinPasswort",
+    [Security.SecureString]$Password,
     [string]$Subject = "CN=BitLocker",
     [int]$YearsValid = 10
 )
 
 $ErrorActionPreference = "Stop"
 
-$securePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+$securePassword = $Password
+if (-not $securePassword) {
+    $securePassword = Read-Host "PFX password" -AsSecureString
+}
 $notAfter = (Get-Date).AddYears($YearsValid)
 
 $cert = New-SelfSignedCertificate `

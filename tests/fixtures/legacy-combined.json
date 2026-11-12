@@ -1,0 +1,25 @@
+{
+  "source_commit": "751da52853c53ab438a1aac143828ef89bb6239f",
+  "test_only": true,
+  "fido": {
+    "credential_id": "f375180af1d0020300001ce2a52e6f2a0d5b3ac8c87b4e49c710030d53f675c08d3810eb2158cd581b54",
+    "public_key": "a5010203262001215820c6cfbf9c4d416996182813233f800324d4da8dd55f11080e0ec749d56186e3b02258205dbf823b6be9e52a1d0695ac615ffaca0630cf9ef0d0baa9add8e2c753b846f9",
+    "rp_id": "legacy-fixture.example.invalid",
+    "challenge": "2d5b93caf42d3260f7709ab401a84dd65742cf88d5d60e36f75075e02ab59df7"
+  },
+  "oath": {
+    "name": "legacy-otp",
+    "challenge": "0000000001234567",
+    "answer": "7605065d7efac5"
+  },
+  "openpgp": {
+    "public_key": "7f49438641045d2dc8695e3aa3f1de624f4b76f752152493234ff8ac1e4e62f32584bcd708c4b3f8b09b14c8de23003b3812ab6bb2e5a4dee18383fb4ea56db550376bc703a9",
+    "digest": "3fdcbaef861f89e6c789cf5ed6dd61e39cbbe412cf7c7f0c2b69dc7b5d65759b",
+    "signature_length": 64
+  },
+  "piv": {
+    "public_key": "7f4943864104d829a1712f23cf90dc277be3f50b07bd1cfa3bc084c7ef19e87fa50434e15f04f8d534b2126214801bd588b3a56b171fd065b8659c46c826ec6695e19d22c5b1",
+    "digest": "8a693e0909a4cb0cd43fbffab770625401024a77bcbac8d5b12c5cef5fd43758",
+    "signature_length": 76
+  }
+}

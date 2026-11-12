@@ -1,0 +1,14 @@
+[
+  {
+    "ecosystem": "pypi",
+    "name": "fido2",
+    "version": "2.2.1",
+    "manifest": "tests/requirements.txt"
+  },
+  {
+    "ecosystem": "pypi",
+    "name": "cryptography",
+    "version": "50.0.2",
+    "manifest": "tests/requirements.txt"
+  }
+]

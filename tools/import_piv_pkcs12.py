@@ -17,7 +17,9 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography import x509
 from smartcard import System
 from ykman.pcsc import ScardSmartCardConnection
-from yubikit.core.smartcard import AID, ApduError, SmartCardProtocol
+from ykman.piv import generate_ccc
+from yubikit.core import Tlv
+from yubikit.core.smartcard import AID, SW, ApduError, SmartCardProtocol
 from yubikit.piv import (
     DEFAULT_MANAGEMENT_KEY,
     KEY_TYPE,
@@ -25,6 +27,7 @@ from yubikit.piv import (
     PIN_POLICY,
     SLOT,
     TOUCH_POLICY,
+    PivSession,
 )
 
 
@@ -82,6 +85,8 @@ def choose_reader(reader_filter: str | None):
         raise RuntimeError("Kein PC/SC-Reader gefunden.")
 
     if not reader_filter:
+        if len(readers) != 1:
+            raise RuntimeError("检测到多个读卡器；请用 --reader 唯一选择目标，不会自动写入第一台设备")
         return readers[0]
 
     lowered = reader_filter.lower()
@@ -91,6 +96,8 @@ def choose_reader(reader_filter: str | None):
         raise RuntimeError(
             f"Kein Reader passend zu '{reader_filter}' gefunden. Verfuegbar: {available}"
         )
+    if len(matches) != 1:
+        raise RuntimeError("读卡器名称匹配多个设备；请提供完整且唯一的 --reader")
     return matches[0]
 
 
@@ -114,45 +121,6 @@ def same_public_key(cert: x509.Certificate, private_key) -> bool:
         Encoding.DER, PublicFormat.SubjectPublicKeyInfo
     )
     return cert_pub == key_pub
-
-
-def build_import_data(private_key, pin_policy: PIN_POLICY, touch_policy: TOUCH_POLICY):
-    key_type = KEY_TYPE.from_public_key(private_key.public_key())
-    bit_len = key_type.bit_len // 8
-
-    if key_type.algorithm.name == "RSA":
-        if not isinstance(private_key, rsa.RSAPrivateKey):
-            raise RuntimeError("RSA-Schluessel erwartet, aber anderer Typ gefunden.")
-        numbers = private_key.private_numbers()
-        if numbers.public_numbers.e != 65537:
-            raise RuntimeError("RSA-Exponent muss 65537 sein.")
-        prime_len = bit_len // 2
-        data = tlv(0x01, int_to_bytes(numbers.p, prime_len))
-        data += tlv(0x02, int_to_bytes(numbers.q, prime_len))
-        data += tlv(0x03, int_to_bytes(numbers.dmp1, prime_len))
-        data += tlv(0x04, int_to_bytes(numbers.dmq1, prime_len))
-        data += tlv(0x05, int_to_bytes(numbers.iqmp, prime_len))
-    elif key_type.algorithm.name == "EC":
-        if not isinstance(private_key, ec.EllipticCurvePrivateKey):
-            raise RuntimeError("EC-Schluessel erwartet, aber anderer Typ gefunden.")
-        numbers = private_key.private_numbers()
-        data = tlv(0x06, int_to_bytes(numbers.private_value, bit_len))
-    else:
-        raise RuntimeError(f"Schluesseltyp {key_type.name} wird hier nicht unterstuetzt.")
-
-    if pin_policy != PIN_POLICY.DEFAULT:
-        data += tlv(0xAA, int_to_bytes(int(pin_policy)))
-    if touch_policy != TOUCH_POLICY.DEFAULT:
-        data += tlv(0xAB, int_to_bytes(int(touch_policy)))
-
-    return key_type, data
-
-
-def build_certificate_object(slot: SLOT, cert: x509.Certificate) -> tuple[OBJECT_ID, bytes]:
-    cert_der = cert.public_bytes(Encoding.DER)
-    obj_id = OBJECT_ID.from_slot(slot)
-    obj_data = tlv(0x70, cert_der) + tlv(0x71, b"\x00") + tlv(0xFE)
-    return obj_id, tlv(0x5C, int_to_bytes(int(obj_id))) + tlv(0x53, obj_data)
 
 
 def _ms_container_name(slot: SLOT) -> bytes:
@@ -195,10 +163,16 @@ def build_mscmap_object(slot: SLOT, cert: x509.Certificate) -> tuple[int, bytes]
     return obj_id, tlv(0x5C, int_to_bytes(obj_id)) + tlv(0x53, obj_data)
 
 
-def build_msroots1_object() -> tuple[int, bytes]:
-    obj_id = 0x5FFF11
-    obj_data = b"\x82\x00"
-    return obj_id, tlv(0x5C, int_to_bytes(obj_id)) + tlv(0x53, obj_data)
+def parse_mscmap_records(raw: bytes) -> list[bytes]:
+    # Yubico's ykpiv_util_write_mscmap stores one 0x81 TLV containing a packed
+    # array of Windows ykpiv_container records (40 UTF-16 code units, 107 B).
+    # Also accept this project's older repeated-TLV representation for migration.
+    records = []
+    for item in Tlv.parse_list(raw):
+        if item.tag != 0x81 or len(item.value) % 107:
+            raise ValueError("无法合并已有 Windows 映射格式；尚未写入密钥或证书")
+        records.extend(item.value[i:i + 107] for i in range(0, len(item.value), 107))
+    return records
 
 
 def _cert_not_after_ascii(cert: x509.Certificate) -> bytes:
@@ -220,15 +194,6 @@ def build_chuid_object(cert: x509.Certificate) -> tuple[int, bytes]:
         + tlv(0xFE)
     )
     return obj_id, tlv(0x5C, int_to_bytes(obj_id)) + tlv(0x53, chuid)
-
-
-def build_ccc_object() -> tuple[int, bytes]:
-    obj_id = 0x5FC107
-    ccc = bytes.fromhex(
-        "F015A000000116FF02887181FB030983F93E8F370DD424"
-        "F10121F20121F300F40100F50110F600F700FA00FB00FC00FD00FE00"
-    )
-    return obj_id, tlv(0x5C, int_to_bytes(obj_id)) + tlv(0x53, ccc)
 
 
 def print_readers(readers: Iterable) -> None:
@@ -356,7 +321,7 @@ def parse_trace_dump(raw: bytes) -> bool:
 
 
 def import_direct(
-    protocol: SmartCardProtocol,
+    session: PivSession,
     slot: SLOT,
     private_key,
     cert: x509.Certificate,
@@ -364,40 +329,52 @@ def import_direct(
     touch_policy: TOUCH_POLICY,
     verify: bool,
 ) -> None:
-    key_type, key_data = build_import_data(private_key, pin_policy, touch_policy)
-    protocol.send_apdu(0, 0xFE, int(key_type), int(slot), key_data)
+    # Validate and merge existing mapping before changing any key or certificate.
+    try:
+        existing_mapping = session.get_object(0x5FFF10)
+    except ApduError as exc:
+        if exc.sw != SW.FILE_NOT_FOUND:
+            raise
+        existing_mapping = b""
+    records = parse_mscmap_records(existing_mapping)
+    _, new_mapping = build_mscmap_object(slot, cert)
+    replacement = Tlv.unpack(0x81, Tlv.parse_dict(new_mapping)[0x53])
+    mapping = Tlv(0x81, b"".join(record for record in records if record[80] != int(slot)) + replacement)
+    if len(mapping) > 2048:
+        raise ValueError("Windows 映射超过本固件 2 KiB 对象上限；尚未写入密钥或证书")
 
-    obj_id, obj_payload = build_certificate_object(slot, cert)
-    protocol.send_apdu(0, 0xDB, 0x3F, 0xFF, obj_payload)
+    session.put_key(slot, private_key, pin_policy, touch_policy)
+    session.put_certificate(slot, cert)
+    protocol = session.protocol
+    obj_id = OBJECT_ID.from_slot(slot)
     print(f"Import-APDUs erfolgreich gesendet, Objekt {obj_id.name} geschrieben.")
 
     chuid_id, chuid_payload = build_chuid_object(cert)
     protocol.send_apdu(0, 0xDB, 0x3F, 0xFF, chuid_payload)
     print(f"CHUID-Objekt 0x{chuid_id:06X} geschrieben.")
 
-    ccc_id, ccc_payload = build_ccc_object()
-    protocol.send_apdu(0, 0xDB, 0x3F, 0xFF, ccc_payload)
-    print(f"CCC-Objekt 0x{ccc_id:06X} geschrieben.")
-
-    mscmap_id, mscmap_payload = build_mscmap_object(slot, cert)
-    protocol.send_apdu(0, 0xDB, 0x3F, 0xFF, mscmap_payload)
-    print(f"Windows-Mappingobjekt 0x{mscmap_id:06X} geschrieben.")
-
-    msroots_id, msroots_payload = build_msroots1_object()
-    protocol.send_apdu(0, 0xDB, 0x3F, 0xFF, msroots_payload)
-    print(f"Windows-Rootobjekt 0x{msroots_id:06X} geschrieben.")
+    try:
+        ccc = session.get_object(OBJECT_ID.CAPABILITY)
+    except ApduError as exc:
+        if exc.sw != SW.FILE_NOT_FOUND:
+            raise
+        ccc = b""
+    if not Tlv.parse_dict(ccc).get(0xF0):
+        session.put_object(OBJECT_ID.CAPABILITY, generate_ccc())
+    session.put_object(0x5FFF10, mapping)
+    print("Windows 映射已合并；其他槽位映射和 MSROOTS 保留。")
 
     if not verify:
         return
 
     try:
-        raw = get_certificate_raw(protocol, slot)
+        raw = session.get_certificate(slot).public_bytes(Encoding.DER)
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(
             f"Import gesendet, aber GET DATA zur Verifikation ist fehlgeschlagen: {exc}"
         ) from exc
 
-    if cert.public_bytes(Encoding.DER) not in raw:
+    if cert.public_bytes(Encoding.DER) != raw:
         raise RuntimeError(
             f"Import gesendet, aber das gelesene Objekt fuer {slot.name} enthaelt nicht das erwartete Zertifikat."
         )
@@ -414,12 +391,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-s", "--slot", default="9d", help="PIV-Slot in Hex, z. B. 9a, 9c, 9d, 9e"
     )
-    parser.add_argument("--reader", help="Teilstring des Reader-Namens")
+    parser.add_argument("--reader", help="唯一的读卡器名称或子串")
+    parser.add_argument("--serial", type=int, help="写入时必须提供预期设备序列号")
     parser.add_argument(
         "--auth-mode",
         choices=("auto", "on", "off"),
-        default="off",
-        help="Aktuell nur Kompatibilitaets-Schalter; der rohe Direktimport laeuft ohne PIV-Session",
+        default="auto",
+        help="兼容旧参数；写入必须完成管理认证，off 仅允许只读诊断",
     )
     parser.add_argument(
         "--management-key",
@@ -558,6 +536,11 @@ def main() -> int:
     private_key = cert = None
     chain = []
     if needs_pkcs12:
+        if args.serial is None:
+            raise RuntimeError("导入必须提供 --serial，连接后核对设备身份再写入")
+        if args.auth_mode == "off":
+            print("导入必须完成管理密钥认证，请使用 --auth-mode auto 或 on", file=sys.stderr)
+            return 2
         if not args.input:
             print("--input ist erforderlich.", file=sys.stderr)
             return 2
@@ -692,13 +675,13 @@ def main() -> int:
             print(f"HEX: {raw.hex().upper()}")
             return 0
 
-        if args.auth_mode != "off":
-            print(
-                "Hinweis: Dieses Skript nutzt absichtlich den rohen Direktimport ohne PIV-Session-Authentisierung."
-            )
-
+        session = PivSession(connection)
+        if session.get_serial() != args.serial:
+            raise RuntimeError("设备序列号不匹配；未进行管理认证或写入")
+        session.authenticate(_management_key)
+        print("管理密钥认证成功，使用官方 yubikit 导入。")
         import_direct(
-            protocol,
+            session,
             slot,
             private_key,
             cert,
@@ -720,5 +703,5 @@ def main() -> int:
             connection.close()
 
 
-if __name__ == "__main__":
+if __name__ in ("__main__", "builtins"):
     raise SystemExit(main())

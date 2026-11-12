@@ -1,12 +1,15 @@
 [submodule "pico-fido"]
 	path = pico-fido
-	url = ../pico-fido.git
+	url = https://github.com/HaltCatch/pico-fido.git
 	branch = main
 [submodule "pico-openpgp"]
 	path = pico-openpgp
-	url = ../pico-openpgp.git
+	url = https://github.com/HaltCatch/pico-openpgp.git
 	branch = main
 [submodule "pico-keys-sdk"]
 	path = pico-keys-sdk
-	url = ../pico-keys-sdk.git
+	url = https://github.com/HaltCatch/pico-keys-sdk.git
 	branch = main
+[submodule "third_party/lvgl"]
+	path = third_party/lvgl
+	url = https://github.com/lvgl/lvgl.git
